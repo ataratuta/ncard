@@ -1,1 +1,1 @@
-# ncard
+# ncard Taratuta Sasha 6.12.2025
