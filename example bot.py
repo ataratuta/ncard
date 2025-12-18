@@ -4,8 +4,13 @@ import logging
 import os
 from dotenv import load_dotenv
 import sqlite3
+import asyncio
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import BotCommand
+from aiogram.filters.command import Command
 
 def init_datebase():
+    pass
 
 load_dotenv()
 
@@ -14,7 +19,12 @@ TOKEN = os.getenv('TOKEN')
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
+async def set_commands(bot: Bot):
+    commands = [
+        BotCommand(command="/menu", description="Главное меню"),
+        BotCommand(command="/profile", description="Профиль"),
+        BotCommand(command="/language", description="Язык"),
+    ]
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
