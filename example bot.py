@@ -28,13 +28,19 @@ TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
 user_data = {}
+user_starcharts = {}
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-profile=types.KeyboardButton("Профиль")
-menu.add(profile)
+profile=types.KeyboardButton("📖Профиль")
+starchart  = types.KeyboardButton("🌌Рассчитать натальную карту")
+planets = types.KeyboardButton("🪐Аспекты планет")
+houses = types.KeyboardButton("🏠Дома в знаках")
+personality = types.KeyboardButton("💫Анализ личности")
+ask_question = types.KeyboardButton("❔Задать вопрос")
+menu.add(profile, starchart, planets, houses, personality, ask_question)
 
 back = types.ReplyKeyboardMarkup(resize_keyboard=True)
 back_button=types.KeyboardButton("Назад")
@@ -87,7 +93,7 @@ def ask_city(message):
 def text_messages(message):
         if message.text == "Назад":
             bot.send_message(message.chat.id, "Что тебя интересует?", reply_markup=menu)
-        elif message.text == "Профиль":
+        elif message.text == "📖Профиль":
             user_id = message.chat.id
             if user_id in user_data:
                 profile_info = f"""📋 Ваш профиль:
@@ -99,8 +105,36 @@ def text_messages(message):
     🏙️ Город рождения: {user_data[user_id].get('city', 'Не указано')}"""
                 bot.send_message(message.chat.id, profile_info, reply_markup=menu)
             else:
-                bot.send_message(message.chat.id, "Профиль не заполнен. Нажмите /start для начала.", reply_markup=menu)
-
+                bot.send_message(message.chat.id,
+                                 "Профиль не заполнен. Нажмите /start для начала.",
+                                 reply_markup=menu)
+        elif message.text == "🪐Аспекты планет" :
+            user_id = message.chat.id
+            if user_id not in user_starcharts:
+                bot.send_message(message.chat.id,
+                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 reply_markup=menu)
+        elif message.text == "🏠Дома в знаках" :
+            user_id = message.chat.id
+            if user_id not in user_starcharts:
+                bot.send_message(message.chat.id,
+                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 reply_markup=menu)
+        elif message.text == "💫Анализ личности" :
+            user_id = message.chat.id
+            if user_id not in user_starcharts:
+                bot.send_message(message.chat.id,
+                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 reply_markup=menu)
+        elif message.text == "❔Задать вопрос" :
+            user_id = message.chat.id
+            if user_id not in user_starcharts:
+                bot.send_message(message.chat.id,
+                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 reply_markup=menu)
+            else:
+                bot.send_message(message.chat.id, "Что тебя интересует?",
+                                 reply_markup=types.ReplyKeyboardRemove())
 
 
 bot.infinity_polling()
