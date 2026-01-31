@@ -4,6 +4,8 @@ from telebot import types
 import os
 import sys
 from dotenv import load_dotenv
+import ephem
+import datetime
 
 
 logging.basicConfig(
@@ -33,8 +35,57 @@ user_starcharts = {}
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def calculate_chart(year, month, day, hour, minute, lat, lon):
+    observer = ephem.Observer()
+    observer.lat = lat
+    observer.lon = lon
+    observer.date = f'{year}/{month}/{day} {hour}:{minute}:00'
+    celestial_bodies = {
+        'Солнце': ephem.Sun(observer),
+        'Луна': ephem.Moon(observer),
+        'Меркурий': ephem.Mercury(observer),
+        'Венера': ephem.Venus(observer),
+        'Марс': ephem.Mars(observer),
+        'Юпитер': ephem.Jupiter(observer),
+        'Сатурн': ephem.Saturn(observer),
+        'Уран': ephem.Uranus(observer),
+        'Нептун': ephem.Neptune(observer),
+        'Плутон': ephem.Pluto(observer),
+    }
+    chart_data = {}
+    for name, body in celestial_bodies.items():
+        constellation = ephem.constellation(body)
+        ra_deg = float(body.ra) * 180 / ephem.pi
+        dec_deg = float(body.dec) * 180 / ephem.pi
+
+        chart_data[name] = {
+            'созвездие': constellation,
+            'прямое_восхождение': round(ra_deg, 2),
+            'склонение': round(dec_deg, 2),
+            'знак_зодиака': zodiac_sign(ra_deg),
+        }
+
+    return chart_data
+def zodiac_sign(ra_degrees):
+    signs = ['Овен', 'Телец', 'Близнецы', 'Рак', 'Лев', 'Дева', 'Весы', 'Скорпион', 'Стрелец', 'Козерог', 'Водолей', 'Рыбы']
+    degrees = ra_degrees % 360
+    sign_index = int(degrees / 30)
+    return signs[sign_index]
+def calculate_houses(year, month, day, hour, minute, lat, lon):
+    observer = ephem.Observer()
+    observer.lat = lat
+    observer.lon = lon
+    observer.date = f'{year}/{month}/{day} {hour}:{minute}:00'
+    houses = []
+    for i in range(12):
+        house_cusp = ephem.degrees(ephem.degrees(observer.sidereal_time()) + i * 30 * ephem.degree)
+        houses.append(house_cusp)
+    return houses
+
+
 menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
-profile=types.KeyboardButton("📖Профиль")
+profile = types.KeyboardButton("📖Профиль")
 starchart  = types.KeyboardButton("🌌Рассчитать натальную карту")
 planets = types.KeyboardButton("🪐Аспекты планет")
 houses = types.KeyboardButton("🏠Дома в знаках")
@@ -55,33 +106,37 @@ def start_message(message):
 def ask_name(message):
     user_id = message.chat.id
     user_data[user_id]['name']=message.text
-    bot.send_message(message.chat.id, "Введите дату рождения\nФормат дд:мм:гггг", reply_markup=types.ReplyKeyboardRemove())
+    bot.send_message(message.chat.id, "Введите дату рождения\nФормат гггг:мм:дд", reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, ask_date)
 def ask_date(message):
     user_id = message.chat.id
-    user_data[user_id]['date']=message.text
+    user_data[user_id]['year']=message.text[:4]
+    user_data[user_id]['month'] = message.text[5:7]
+    user_data[user_id]['day'] = message.text[8:]
     bot.send_message(message.chat.id, "Введите время рождения\nФормат чч:мм", reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, ask_time)
 def ask_time(message):
     user_id = message.chat.id
-    user_data[user_id]['time']=message.text
+    user_data[user_id]['hour']=message.text[:2]
+    user_data[user_id]['minute'] = message.text[3:]
     bot.send_message(message.chat.id, "Введите часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
     bot.register_next_step_handler(message, ask_timezone)
 def ask_timezone(message):
         user_id = message.chat.id
         user_data[user_id]['timezone'] = message.text
-        bot.send_message(message.chat.id, "Введите город рождения\nФормат страна, город", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат шш.шшшш, дд.дддд", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, ask_city)
 def ask_city(message):
     user_id = message.chat.id
-    user_data[user_id]['city'] = message.text
+    user_data[user_id]['lat'] = message.text[:7]
+    user_data[user_id]['lon'] = message.text[9:]
     info = f"""✅ Данные сохранены:
 
 👤 Имя: {user_data[user_id].get('name', 'Не указано')}
-📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
-⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
+📅 Дата рождения: {user_data[user_id].get('year'+":"+'month'+":"+'day', 'Не указано')}
+⏰ Время рождения: {user_data[user_id].get('hour'+":"+'minute', 'Не указано')}
 🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
-🏙️ Город рождения: {user_data[user_id].get('city', 'Не указано')}
+🏙️ Место рождения: {user_data[user_id].get('lat'+", "+'lon', 'Не указано')}
 
     Что тебя интересует?"""
 
@@ -99,10 +154,10 @@ def text_messages(message):
                 profile_info = f"""📋 Ваш профиль:
 
     👤 Имя: {user_data[user_id].get('name', 'Не указано')}
-    📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
-    ⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
+    📅 Дата рождения: {user_data[user_id].get('year'+":"+'month'+":"+'day', 'Не указано')}
+    ⏰ Время рождения: {user_data[user_id].get('hour'+":"+'minute', 'Не указано')}
     🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
-    🏙️ Город рождения: {user_data[user_id].get('city', 'Не указано')}"""
+    🏙️ Город рождения: {user_data[user_id].get('lat'+", "+'lon', 'Не указано')}"""
                 bot.send_message(message.chat.id, profile_info, reply_markup=menu)
             else:
                 bot.send_message(message.chat.id,
@@ -112,29 +167,38 @@ def text_messages(message):
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
         elif message.text == "🏠Дома в знаках" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
         elif message.text == "💫Анализ личности" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
         elif message.text == "❔Задать вопрос" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите 🌌Рассчитать натальную карту для создания",
+                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
             else:
                 bot.send_message(message.chat.id, "Что тебя интересует?",
                                  reply_markup=types.ReplyKeyboardRemove())
+        elif message.text == "🌌Рассчитать натальную карту" :
+            user_id = message.chat.id
+            if user_id in user_data:
+                star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
+                bot.send_message(message.chat.id, star_chart, reply_markup=menu)
+            else:
+                bot.send_message(message.chat.id,
+                                 "Для расчета натальной карты необходимо заполнить профиль. Нажмите /start для начала.",
+                                 reply_markup=menu)
 
 
 bot.infinity_polling()
