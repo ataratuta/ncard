@@ -53,19 +53,21 @@ def calculate_chart(year, month, day, hour, minute, lat, lon):
         'Нептун': ephem.Neptune(observer),
         'Плутон': ephem.Pluto(observer),
     }
+    planets_positions = {}
     chart_data = {}
+    angles = calculate_angles(observer, planets_positions)
     for name, body in celestial_bodies.items():
         constellation = ephem.constellation(body)
         ra_deg = float(body.ra) * 180 / ephem.pi
         dec_deg = float(body.dec) * 180 / ephem.pi
-
+        planets_positions[name] = ra_deg
         chart_data[name] = {
             'созвездие': constellation,
             'прямое_восхождение': round(ra_deg, 2),
             'склонение': round(dec_deg, 2),
             'знак_зодиака': zodiac_sign(ra_deg),
+            'углы': angles,
         }
-
     return chart_data
 def zodiac_sign(ra_degrees):
     signs = ['Овен', 'Телец', 'Близнецы', 'Рак', 'Лев', 'Дева', 'Весы', 'Скорпион', 'Стрелец', 'Козерог', 'Водолей', 'Рыбы']
@@ -84,14 +86,47 @@ def calculate_houses(year, month, day, hour, minute, lat, lon):
     return houses
 
 
+def calculate_angles(observer, planets_positions):
+    sidereal_time = observer.sidereal_time()
+    asc_ra = float(sidereal_time) * 15
+    asc = asc_ra % 360
+    asc_sign = zodiac_sign(asc)
+    asc_degree = round(asc % 30, 2)
+    mc = (asc + 90) % 360
+    mc_sign = zodiac_sign(mc)
+    mc_degree = round(mc % 30, 2)
+    dsc = (asc + 180) % 360
+    dsc_sign = zodiac_sign(dsc)
+    ic = (mc + 180) % 360
+    ic_sign = zodiac_sign(ic)
+    return {
+        'ascendant': {
+            'знак': asc_sign,
+            'градус': round(asc_degree, 2),
+            'координата': round(asc, 2)
+        },
+        'midheaven': {
+            'знак': mc_sign,
+            'градус': round(mc_degree, 2),
+            'координата': round(mc, 2)
+        },
+        'descendant': {
+            'знак': dsc_sign,
+            'координата': round(dsc, 2)
+        },
+        'imum_coeli': {
+            'знак': ic_sign,
+            'координата': round(ic, 2)
+        }
+    }
+
+
 menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
 profile = types.KeyboardButton("📖Профиль")
 starchart  = types.KeyboardButton("🌌Рассчитать натальную карту")
-planets = types.KeyboardButton("🪐Аспекты планет")
-houses = types.KeyboardButton("🏠Дома в знаках")
 personality = types.KeyboardButton("💫Анализ личности")
 ask_question = types.KeyboardButton("❔Задать вопрос")
-menu.add(profile, starchart, planets, houses, personality, ask_question)
+menu.add(profile, starchart, personality, ask_question)
 
 back = types.ReplyKeyboardMarkup(resize_keyboard=True)
 back_button=types.KeyboardButton("Назад")
@@ -126,13 +161,13 @@ def ask_time(message):
 def ask_timezone(message):
         user_id = message.chat.id
         user_data[user_id]['timezone'] = message.text
-        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат шш.шшшш, дд.дддд", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат шш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, ask_place)
 def ask_place(message):
     user_id = message.chat.id
     user_data[user_id]['place'] = message.text
-    user_data[user_id]['lat'] = message.text[0:7]
-    user_data[user_id]['lon'] = message.text[9:]
+    user_data[user_id]['lat'] = message.text[0:2]
+    user_data[user_id]['lon'] = message.text[5:]
     info = f"""✅ Данные сохранены:
 
 👤 Имя: {user_data[user_id].get('name', 'Не указано')}
@@ -166,25 +201,6 @@ def text_messages(message):
                 bot.send_message(message.chat.id,
                                  "Профиль не заполнен. Нажмите /start для начала.",
                                  reply_markup=menu)
-        elif message.text == "🪐Аспекты планет" :
-            user_id = message.chat.id
-            if user_id not in user_starcharts:
-                bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
-                                 reply_markup=menu)
-        elif message.text == "🏠Дома в знаках" :
-            user_id = message.chat.id
-            if user_id not in user_starcharts:
-                bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
-                                 reply_markup=menu)
-            else:
-                answer = "🌌 Ваша дома:\n\n"
-                star_chart = user_starcharts[message.chat.id]
-                for planet, data in star_chart.items():
-                    answer += f"✨ {planet}:\n"
-                    answer += f"   Знак: {data['знак_зодиака']}\n"
-                bot.send_message(message.chat.id, answer, reply_markup=menu)
         elif message.text == "💫Анализ личности" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
@@ -208,8 +224,13 @@ def text_messages(message):
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
                     chart_text += f"   Знак: {data['знак_зодиака']}\n"
-                    chart_text += f"   Созвездие: {data['созвездие'][0]} ({data['созвездие'][1]})\n"
+                    chart_text += f"   Созвездие: {data['созвездие'][1]}\n"
                     chart_text += f"   Координаты: {data['прямое_восхождение']}°, {data['склонение']}°\n\n"
+                chart_text += "⚡ УГЛЫ КАРТЫ:\n"
+                chart_text += f"   ASC: {data['углы']['ascendant']['знак']} {data['углы']['ascendant']['градус']}°\n"
+                chart_text += f"   MC:  {data['углы']['midheaven']['знак']} {data['углы']['midheaven']['градус']}°\n"
+                chart_text += f"   DSC: {data['углы']['descendant']['знак']}\n"
+                chart_text += f"   IC:  {data['углы']['imum_coeli']['знак']}\n\n"
                 user_starcharts[user_id]=star_chart
                 bot.send_message(message.chat.id, chart_text, reply_markup=menu)
             else:
