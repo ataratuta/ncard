@@ -6,6 +6,37 @@ import sys
 from dotenv import load_dotenv
 import ephem
 import datetime
+import openai
+import aiosqlite
+
+async def init_db():
+    async with aiosqlite.connect('my_bot.db') as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                name TEXT,
+                starchart TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        await db.commit()
+
+async def add_user(user_id, username):
+    async with aiosqlite.connect('my_bot.db') as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO users (id, name) VALUES (?, ?)",
+                (user_id, username)
+            )
+            await db.commit()
+            print(f"Пользователь {username} добавлен")
+async def add_starchart(user_id, username):
+    async with aiosqlite.connect('my_bot.db') as db:
+            await db.execute(
+                "INSERT OR IGNORE INTO starchart (id, name) VALUES (?, ?)",
+                (user_id, user_starcharts[user_id])
+            )
+            await db.commit()
+            print(f"Натальная карта {username} добавлена")
 
 
 logging.basicConfig(
@@ -26,6 +57,7 @@ def init_datebase():
 
 load_dotenv()
 
+API = os.getenv('API')
 TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 
@@ -168,6 +200,7 @@ def ask_place(message):
     user_data[user_id]['place'] = message.text
     user_data[user_id]['lat'] = message.text[0:2]
     user_data[user_id]['lon'] = message.text[5:]
+    add_user(user_id, message.from_user.username)
     info = f"""✅ Данные сохранены:
 
 👤 Имя: {user_data[user_id].get('name', 'Не указано')}
@@ -207,6 +240,17 @@ def text_messages(message):
                 bot.send_message(message.chat.id,
                                  "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
+            else:
+                def ai_analysis():
+                   response = openai.ChatCompletion.create(
+                   model="",
+                   messages=[
+                    {"role": "system", "content": "Ты таролог пользователя, вот его натальная карта: Проанализируй его личность исходя из данных натальной карты"}
+                   ]
+                   )
+                   reply = response["choices"][0]["message"]["content"]
+                   bot.send_message(message.chat.id, reply)
+                bot.register_next_step_handler(message, ai_analysis)
         elif message.text == "❔Задать вопрос" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
@@ -216,10 +260,23 @@ def text_messages(message):
             else:
                 bot.send_message(message.chat.id, "Что тебя интересует?",
                                  reply_markup=types.ReplyKeyboardRemove())
+                def ai_answer(message):
+                   response = openai.ChatCompletion.create(
+                   model="",
+                   messages=[
+                    {"role": "system", "content": "Ты таролог пользователя, вот его натальная карта: Ответь на его вопрос"},
+                    {"role": "user", "content": message.text}
+                   ]
+                   )
+                   reply = response["choices"][0]["message"]["content"]
+                   bot.send_message(message.chat.id, reply)
+                bot.register_next_step_handler(message, ai_answer)
         elif message.text == "🌌Рассчитать натальную карту" :
             user_id = message.chat.id
             if user_id in user_data:
                 star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
+                user_starcharts[user_id] = star_chart
+                add_starchart(user_id, message.from_user.username)
                 chart_text = "🌌 Ваша натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
@@ -231,7 +288,6 @@ def text_messages(message):
                 chart_text += f"   MC:  {data['углы']['midheaven']['знак']} {data['углы']['midheaven']['градус']}°\n"
                 chart_text += f"   DSC: {data['углы']['descendant']['знак']}\n"
                 chart_text += f"   IC:  {data['углы']['imum_coeli']['знак']}\n\n"
-                user_starcharts[user_id]=star_chart
                 bot.send_message(message.chat.id, chart_text, reply_markup=menu)
             else:
                 bot.send_message(message.chat.id,
