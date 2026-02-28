@@ -1,4 +1,6 @@
 import logging
+import math
+
 import telebot
 from telebot import types
 import os
@@ -88,6 +90,7 @@ def calculate_chart(year, month, day, hour, minute, lat, lon):
     planets_positions = {}
     chart_data = {}
     angles = calculate_angles(observer, planets_positions)
+    houses = calculate_houses(year, month, day, hour, minute, lat, lon)
     for name, body in celestial_bodies.items():
         constellation = ephem.constellation(body)
         ra_deg = float(body.ra) * 180 / ephem.pi
@@ -99,6 +102,7 @@ def calculate_chart(year, month, day, hour, minute, lat, lon):
             'склонение': round(dec_deg, 2),
             'знак_зодиака': zodiac_sign(ra_deg),
             'углы': angles,
+            'дома': houses,
         }
     return chart_data
 def zodiac_sign(ra_degrees):
@@ -106,17 +110,64 @@ def zodiac_sign(ra_degrees):
     degrees = ra_degrees % 360
     sign_index = int(degrees / 30)
     return signs[sign_index]
+
+
 def calculate_houses(year, month, day, hour, minute, lat, lon):
     observer = ephem.Observer()
-    observer.lat = lat
-    observer.lon = lon
+    observer.lat = str(lat)
+    observer.lon = str(lon)
     observer.date = f'{year}/{month}/{day} {hour}:{minute}:00'
+    sidereal_time = observer.sidereal_time()
+    st_degrees = float(sidereal_time) * 15
     houses = []
     for i in range(12):
-        house_cusp = ephem.degrees(ephem.degrees(observer.sidereal_time()) + i * 30 * ephem.degree)
+        house_cusp_deg = (st_degrees + i * 30) % 360
+        house_cusp = ephem.degrees(str(house_cusp_deg))
         houses.append(house_cusp)
     return houses
-
+def format_houses_output(houses_cusps):
+    house_names = {
+        1: "I (Асцендент)",
+        2: "II",
+        3: "III",
+        4: "IV (IC)",
+        5: "V",
+        6: "VI",
+        7: "VII (Десцендент)",
+        8: "VIII",
+        9: "IX",
+        10: "X (MC)",
+        11: "XI",
+        12: "XII"
+    }
+    zodiac_signs = [
+        'Овен', 'Телец', 'Близнецы', 'Рак',
+        'Лев', 'Дева', 'Весы', 'Скорпион',
+        'Стрелец', 'Козерог', 'Водолей', 'Рыбы'
+    ]
+    output = "🏠 *КУСПИДЫ ДОМОВ*\n\n"
+    for i, cusp in enumerate(houses_cusps, 1):
+        degrees = float(cusp) * 180 / math.pi
+        norm_degrees = degrees % 360
+        sign_index = int(norm_degrees / 30)
+        sign = zodiac_signs[sign_index]
+        sign_degree = norm_degrees % 30
+        emoji = {
+            1: "⬆️", 4: "⬇️", 7: "⬇️", 10: "⬆️"
+        }.get(i, "•")
+        output += f"{emoji} *{house_names[i]}:* "
+        output += f"{sign} {int(sign_degree)}°\n"
+        if i in [1, 4, 7, 10]:
+            output += "   ⚡ Угловой дом\n"
+        if i == 1:
+            output += "   *Значение:* Личность, внешность, начало жизни\n"
+        elif i == 4:
+            output += "   *Значение:* Семья, дом, корни, прошлое\n"
+        elif i == 7:
+            output += "   *Значение:* Партнерство, брак, отношения\n"
+        elif i == 10:
+            output += "   *Значение:* Карьера, цели, статус\n"
+    return output
 
 def calculate_angles(observer, planets_positions):
     sidereal_time = observer.sidereal_time()
@@ -288,6 +339,8 @@ def text_messages(message):
                 chart_text += f"   MC:  {data['углы']['midheaven']['знак']} {data['углы']['midheaven']['градус']}°\n"
                 chart_text += f"   DSC: {data['углы']['descendant']['знак']}\n"
                 chart_text += f"   IC:  {data['углы']['imum_coeli']['знак']}\n\n"
+                chart_text += format_houses_output(calculate_houses(year=user_data[user_id]['year'], month=user_data[user_id]['month'], day=user_data[user_id]['day'], hour=user_data[user_id]['hour'], minute=user_data[user_id]['minute']
+                                                                , lat=user_data[user_id]['lat'], lon=user_data[user_id]['lon']))
                 bot.send_message(message.chat.id, chart_text, reply_markup=menu)
             else:
                 bot.send_message(message.chat.id,
