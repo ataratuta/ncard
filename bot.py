@@ -10,8 +10,9 @@ import ephem
 import datetime
 import openai
 import aiosqlite
+import sqlite3 as sl
 
-async def init_db():
+"""async def init_db():
     async with aiosqlite.connect('my_bot.db') as db:
         await db.execute('''
             CREATE TABLE IF NOT EXISTS users (
@@ -34,11 +35,11 @@ async def add_user(user_id, username):
 async def add_starchart(user_id, username):
     async with aiosqlite.connect('my_bot.db') as db:
             await db.execute(
-                "INSERT OR IGNORE INTO starchart (id, name) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO starchart (id, starchart) VALUES (?, ?)",
                 (user_id, user_starcharts[user_id])
             )
             await db.commit()
-            print(f"Натальная карта {username} добавлена")
+            print(f"Натальная карта {username} добавлена")"""
 
 
 logging.basicConfig(
@@ -58,6 +59,28 @@ def init_datebase():
     pass
 
 load_dotenv()
+
+con = sl.connect('reports.db')
+with con:
+    data = con.execute("select count(*) from sqlite_master where type='table' and name='data'")
+    for row in data:
+        if row[0] == 0:
+            with con:
+                con.execute("""
+                  CREATE TABLE data (
+                     id VARCHAR(200) PRIMARY KEY,
+                     username VARCHAR(200),
+                     starchart VARCHAR(20000)
+                  );
+                """)
+def add_user(user_id, username):
+    data = [(str(user_id), str(username))]
+    with con:
+        con.executemany('INSERT INTO data (id, username) values(?, ?)', data)
+def add_starchart(user_id, username, starchart):
+    data = [(str(user_id), str(username))]
+    with con:
+        con.executemany('INSERT INTO data (id, username) values(?, ?)', data)
 
 API = os.getenv('API')
 TOKEN = os.getenv('TOKEN')
@@ -294,9 +317,9 @@ def text_messages(message):
             else:
                 def ai_analysis():
                    response = openai.ChatCompletion.create(
-                   model="",
+                   model="gpt-5-mini",
                    messages=[
-                    {"role": "system", "content": "Ты таролог пользователя, вот его натальная карта: Проанализируй его личность исходя из данных натальной карты"}
+                    {"role": "system", "content": f"Ты таролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Проанализируй его личность исходя из данных натальной карты"}
                    ]
                    )
                    reply = response["choices"][0]["message"]["content"]
@@ -313,9 +336,9 @@ def text_messages(message):
                                  reply_markup=types.ReplyKeyboardRemove())
                 def ai_answer(message):
                    response = openai.ChatCompletion.create(
-                   model="",
+                   model="gpt-5-mini",
                    messages=[
-                    {"role": "system", "content": "Ты таролог пользователя, вот его натальная карта: Ответь на его вопрос"},
+                    {"role": "system", "content": f"Ты таролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос"},
                     {"role": "user", "content": message.text}
                    ]
                    )
@@ -327,7 +350,7 @@ def text_messages(message):
             if user_id in user_data:
                 star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
                 user_starcharts[user_id] = star_chart
-                add_starchart(user_id, message.from_user.username)
+                """add_starchart(user_id, message.from_user.username)"""
                 chart_text = "🌌 Ваша натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
