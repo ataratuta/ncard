@@ -9,37 +9,7 @@ from dotenv import load_dotenv
 import ephem
 import datetime
 import openai
-import aiosqlite
-import sqlite3 as sl
-
-"""async def init_db():
-    async with aiosqlite.connect('my_bot.db') as db:
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                name TEXT,
-                starchart TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        await db.commit()
-
-async def add_user(user_id, username):
-    async with aiosqlite.connect('my_bot.db') as db:
-            await db.execute(
-                "INSERT OR IGNORE INTO users (id, name) VALUES (?, ?)",
-                (user_id, username)
-            )
-            await db.commit()
-            print(f"Пользователь {username} добавлен")
-async def add_starchart(user_id, username):
-    async with aiosqlite.connect('my_bot.db') as db:
-            await db.execute(
-                "INSERT OR IGNORE INTO starchart (id, starchart) VALUES (?, ?)",
-                (user_id, user_starcharts[user_id])
-            )
-            await db.commit()
-            print(f"Натальная карта {username} добавлена")"""
+from openai import OpenAI
 
 
 logging.basicConfig(
@@ -60,31 +30,12 @@ def init_datebase():
 
 load_dotenv()
 
-con = sl.connect('reports.db')
-with con:
-    data = con.execute("select count(*) from sqlite_master where type='table' and name='data'")
-    for row in data:
-        if row[0] == 0:
-            with con:
-                con.execute("""
-                  CREATE TABLE data (
-                     id VARCHAR(200) PRIMARY KEY,
-                     username VARCHAR(200),
-                     starchart VARCHAR(20000)
-                  );
-                """)
-def add_user(user_id, username):
-    data = [(str(user_id), str(username))]
-    with con:
-        con.executemany('INSERT INTO data (id, username) values(?, ?)', data)
-def add_starchart(user_id, username, starchart):
-    data = [(str(user_id), str(username))]
-    with con:
-        con.executemany('INSERT INTO data (id, username) values(?, ?)', data)
+
 
 API = os.getenv('API')
 TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
+client = OpenAI(api_key=API)
 
 user_data = {}
 user_starcharts = {}
@@ -274,7 +225,7 @@ def ask_place(message):
     user_data[user_id]['place'] = message.text
     user_data[user_id]['lat'] = message.text[0:2]
     user_data[user_id]['lon'] = message.text[5:]
-    add_user(user_id, message.from_user.username)
+    """add_user(user_id, message.from_user.username)"""
     info = f"""✅ Данные сохранены:
 
 👤 Имя: {user_data[user_id].get('name', 'Не указано')}
@@ -315,16 +266,20 @@ def text_messages(message):
                                  "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
             else:
-                def ai_analysis():
-                   response = openai.ChatCompletion.create(
+                def ai_analysis(message):
+                   response = client.chat.completions.create(
                    model="gpt-5-mini",
-                   messages=[
-                    {"role": "system", "content": f"Ты таролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Проанализируй его личность исходя из данных натальной карты"}
-                   ]
+                       messages=[
+                           {"role": "system",
+                            "content": f"Ты астролог. Вот натальная карта: {user_starcharts[user_id]}"},
+                           {"role": "user", "content": "Проанализируй мою личность"}
+                       ]
+
                    )
                    reply = response["choices"][0]["message"]["content"]
-                   bot.send_message(message.chat.id, reply)
-                bot.register_next_step_handler(message, ai_analysis)
+                   bot.send_message(message.chat.id, reply, reply_markup=menu)
+
+                ai_analysis(message)
         elif message.text == "❔Задать вопрос" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
@@ -335,7 +290,7 @@ def text_messages(message):
                 bot.send_message(message.chat.id, "Что тебя интересует?",
                                  reply_markup=types.ReplyKeyboardRemove())
                 def ai_answer(message):
-                   response = openai.ChatCompletion.create(
+                   response = client.chat.completions.create(
                    model="gpt-5-mini",
                    messages=[
                     {"role": "system", "content": f"Ты таролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос"},
@@ -343,7 +298,7 @@ def text_messages(message):
                    ]
                    )
                    reply = response["choices"][0]["message"]["content"]
-                   bot.send_message(message.chat.id, reply)
+                   bot.send_message(message.chat.id, reply, reply_markup=menu)
                 bot.register_next_step_handler(message, ai_answer)
         elif message.text == "🌌Рассчитать натальную карту" :
             user_id = message.chat.id
