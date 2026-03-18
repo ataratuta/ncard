@@ -8,7 +8,6 @@ import sys
 from dotenv import load_dotenv
 import ephem
 import datetime
-import openai
 from openai import OpenAI
 
 
@@ -31,11 +30,10 @@ def init_datebase():
 load_dotenv()
 
 
-
-API = os.getenv('API')
 TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
-client = OpenAI(api_key=API)
+client = OpenAI(api_key=os.getenv('API'))
+
 
 user_data = {}
 user_starcharts = {}
@@ -218,13 +216,13 @@ def ask_time(message):
 def ask_timezone(message):
         user_id = message.chat.id
         user_data[user_id]['timezone'] = message.text
-        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат шш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
+        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат:\nшш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
         bot.register_next_step_handler(message, ask_place)
 def ask_place(message):
     user_id = message.chat.id
     user_data[user_id]['place'] = message.text
-    user_data[user_id]['lat'] = message.text[0:2]
-    user_data[user_id]['lon'] = message.text[5:]
+    user_data[user_id]['lat'] = message.text[0:message.text.find(',')]
+    user_data[user_id]['lon'] = message.text[message.text.find(' '):]
     """add_user(user_id, message.from_user.username)"""
     info = f"""✅ Данные сохранены:
 
@@ -268,15 +266,15 @@ def text_messages(message):
             else:
                 def ai_analysis(message):
                    response = client.chat.completions.create(
-                   model="gpt-5-mini",
+                   model="gpt-4.1-mini",
                        messages=[
                            {"role": "system",
-                            "content": f"Ты астролог. Вот натальная карта: {user_starcharts[user_id]}"},
+                            "content": f"Ты астролог пользователя. Вот его натальная карта: {user_starcharts[user_id]}"},
                            {"role": "user", "content": "Проанализируй мою личность"}
                        ]
 
                    )
-                   reply = response["choices"][0]["message"]["content"]
+                   reply = response.choices[0].message.content
                    bot.send_message(message.chat.id, reply, reply_markup=menu)
 
                 ai_analysis(message)
@@ -291,13 +289,13 @@ def text_messages(message):
                                  reply_markup=types.ReplyKeyboardRemove())
                 def ai_answer(message):
                    response = client.chat.completions.create(
-                   model="gpt-5-mini",
+                   model="gpt-4.1-mini",
                    messages=[
-                    {"role": "system", "content": f"Ты таролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос"},
+                    {"role": "system", "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос"},
                     {"role": "user", "content": message.text}
                    ]
                    )
-                   reply = response["choices"][0]["message"]["content"]
+                   reply = response.choices[0].message.content
                    bot.send_message(message.chat.id, reply, reply_markup=menu)
                 bot.register_next_step_handler(message, ai_answer)
         elif message.text == "🌌Рассчитать натальную карту" :
