@@ -1,5 +1,7 @@
 import logging
 import math
+import numpy as np
+import matplotlib.pyplot as plt
 
 import telebot
 from telebot import types
@@ -174,6 +176,92 @@ def calculate_angles(observer, planets_positions):
             'координата': round(ic, 2)
         }
     }
+def draw_natal_chart(chart_data, output_file="natal_chart.png"):
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': 'polar'})
+    ax.set_theta_zero_location("E")
+    ax.set_theta_direction(-1)
+    ax.set_ylim(0, 1.1)
+    ax.set_yticklabels([])
+    ax.set_xticklabels([])
+    ax.grid(False)
+    ax.set_title("Натальная карта", va='bottom', fontsize=16)
+
+    theta = np.linspace(0, 2 * np.pi, 720)
+    ax.plot(theta, np.full_like(theta, 1.0), linewidth=2)
+    ax.plot(theta, np.full_like(theta, 0.75), linewidth=1)
+    ax.plot(theta, np.full_like(theta, 0.45), linewidth=1)
+
+    zodiac_signs = [
+        'Овен', 'Телец', 'Близнецы', 'Рак', 'Лев', 'Дева',
+        'Весы', 'Скорпион', 'Стрелец', 'Козерог', 'Водолей', 'Рыбы'
+    ]
+
+    for i in range(12):
+        start_deg = i * 30
+        angle = start_deg * math.pi / 180
+        ax.plot([angle, angle], [0.75, 1.0], linewidth=1)
+        text_angle = (start_deg+15) * math.pi / 180
+        ax.text(
+            text_angle,
+            0.87,
+            zodiac_signs[i],
+            ha='center',
+            va='center',
+            fontsize=10
+        )
+        ax.text(
+            angle,
+            1.03,
+            f"{start_deg}°",
+            ha='center',
+            va='center',
+            fontsize=8
+        )
+
+    planet_labels = {
+        'Солнце': '☉',
+        'Луна': '☽',
+        'Меркурий': '☿',
+        'Венера': '♀',
+        'Марс': '♂',
+        'Юпитер': '♃',
+        'Сатурн': '♄',
+        'Уран': '♅',
+        'Нептун': '♆',
+        'Плутон': '♇',
+    }
+
+    used_angles = []
+    for planet, data in chart_data.items():
+        deg = data['прямое_восхождение'] % 360
+        angle = deg * math.pi / 180
+        point_radius = 0.58
+        text_radius = 0.48
+        for used_deg in used_angles:
+            if abs(deg - used_deg) < 8:
+                point_radius += 0.05
+                text_radius -= 0.05
+        used_angles.append(deg)
+        ax.scatter([angle], [point_radius], s=50)
+        label = planet_labels.get(planet, planet)
+        ax.text(
+            angle,
+            text_radius,
+            label,
+            ha='center',
+            va='center',
+            fontsize=13
+        )
+        ax.text(
+            angle,
+            0.67,
+            f"{planet}\n{deg:.1f}°",
+            ha='center',
+            va='center',
+            fontsize=8
+        )
+    plt.savefig(output_file, bbox_inches='tight', dpi=200)
+    plt.close(fig)
 
 
 menu = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -304,6 +392,15 @@ def text_messages(message):
                 star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
                 user_starcharts[user_id] = star_chart
                 """add_starchart(user_id, message.from_user.username)"""
+                filename = f"natal_chart_{user_id}.png"
+                draw_natal_chart(star_chart, filename)
+                with open(filename, "rb") as photo:
+                    bot.send_photo(
+                        message.chat.id,
+                        photo,
+                        caption="🌌 Ваша натальная карта",
+                        reply_markup=menu
+                    )
                 chart_text = "🌌 Ваша натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
