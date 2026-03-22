@@ -2,7 +2,7 @@ import logging
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-
+import sqlite3 as sl
 import telebot
 from telebot import types
 import os
@@ -36,9 +36,39 @@ TOKEN = os.getenv('TOKEN')
 bot = telebot.TeleBot(TOKEN)
 client = OpenAI(api_key=os.getenv('API'))
 
-
 user_data = {}
 user_starcharts = {}
+
+con = sl.connect('reports.db')
+def conn():
+    return sl.connect('reports.db')
+with conn() as con:
+    data = con.execute("select count(*) from sqlite_master where type='table' and name='users'")
+    cursor = con.cursor()
+    for row in data:
+        if row[0] == 0:
+            with con:
+                cursor.execute("""
+                  CREATE TABLE IF NOT EXISTS users (
+                     id VARCHAR(200) PRIMARY KEY,
+                     username VARCHAR(200),
+                     data VARCHAR(20000),
+                     starchart VARCHAR(2000000)
+                  );
+                """)
+def add_user(user_id):
+    with conn() as con:
+        cursor = con.cursor()
+        cursor.execute(
+            'INSERT INTO users (id, username, data) VALUES (?, ?, ?)',
+            (user_id, user_data[user_id]['username'], str(user_data[user_id]))
+        )
+        con.commit()
+def add_starchart(user_id):
+    with conn() as con:
+        cursor = con.cursor()
+        cursor.execute('UPDATE users SET starchart = ? WHERE id = ?', (user_starcharts[user_id], user_id))
+        con.commit()
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -278,51 +308,71 @@ back.add(back_button)
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    user_data[message.chat.id] = {}
-    bot.send_message(message.chat.id, "Добрый день. Введите имя.", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, ask_name)
-def ask_name(message):
-    user_id = message.chat.id
-    user_data[user_id]['name']=message.text
-    bot.send_message(message.chat.id, "Введите дату рождения\nФормат гггг:мм:дд", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, ask_date)
-def ask_date(message):
-    user_id = message.chat.id
-    user_data[user_id]['date'] = message.text
-    user_data[user_id]['year']=message.text[0:4]
-    user_data[user_id]['month'] = message.text[5:7]
-    user_data[user_id]['day'] = message.text[8:]
-    bot.send_message(message.chat.id, "Введите время рождения\nФормат чч:мм", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, ask_time)
-def ask_time(message):
-    user_id = message.chat.id
-    user_data[user_id]['time'] = message.text
-    user_data[user_id]['hour']=message.text[0:2]
-    user_data[user_id]['minute'] = message.text[3:]
-    bot.send_message(message.chat.id, "Введите часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
-    bot.register_next_step_handler(message, ask_timezone)
-def ask_timezone(message):
-        user_id = message.chat.id
-        user_data[user_id]['timezone'] = message.text
-        bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат:\nшш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
-        bot.register_next_step_handler(message, ask_place)
-def ask_place(message):
-    user_id = message.chat.id
-    user_data[user_id]['place'] = message.text
-    user_data[user_id]['lat'] = message.text[0:message.text.find(',')]
-    user_data[user_id]['lon'] = message.text[message.text.find(' '):]
-    """add_user(user_id, message.from_user.username)"""
-    info = f"""✅ Данные сохранены:
+    with conn() as con:
+        cursor = con.cursor()
+        cursor.execute("SELECT * FROM users WHERE username = ?", (message.from_user.username,))
+        result = cursor.fetchone()
+        if result:
+            user_id = message.chat.id
+            with conn() as con:
+                cursor = con.cursor()
+                cursor.execute("SELECT data FROM users WHERE username = ?", (message.from_user.username,))
+                user_data[user_id] = cursor.fetchone()
+            with conn() as con:
+                cursor = con.cursor()
+                cursor.execute("SELECT starchart FROM users WHERE username = ?", (message.from_user.username,))
+                user_starcharts[user_id] = cursor.fetchone()
+            bot.send_message(message.chat.id, "С возвращением! Что тебя интересует?", reply_markup=menu)
+        else:
+            def intro(message):
+                user_id = message.chat.id
+                user_data[message.chat.id] = {}
+                user_data[user_id]['username'] = message.from_user.username
+                bot.send_message(message.chat.id, "Добрый день. Введите имя.", reply_markup=types.ReplyKeyboardRemove())
+                bot.register_next_step_handler(message, ask_name)
+            def ask_name(message):
+                user_id = message.chat.id
+                user_data[user_id]['name']=message.text
+                bot.send_message(message.chat.id, "Введите дату рождения\nФормат гггг:мм:дд", reply_markup=types.ReplyKeyboardRemove())
+                bot.register_next_step_handler(message, ask_date)
+            def ask_date(message):
+                user_id = message.chat.id
+                user_data[user_id]['date'] = message.text
+                user_data[user_id]['year']=message.text[0:4]
+                user_data[user_id]['month'] = message.text[5:7]
+                user_data[user_id]['day'] = message.text[8:]
+                bot.send_message(message.chat.id, "Введите время рождения\nФормат чч:мм", reply_markup=types.ReplyKeyboardRemove())
+                bot.register_next_step_handler(message, ask_time)
+            def ask_time(message):
+                user_id = message.chat.id
+                user_data[user_id]['time'] = message.text
+                user_data[user_id]['hour']=message.text[0:2]
+                user_data[user_id]['minute'] = message.text[3:]
+                bot.send_message(message.chat.id, "Введите часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
+                bot.register_next_step_handler(message, ask_timezone)
+            def ask_timezone(message):
+                    user_id = message.chat.id
+                    user_data[user_id]['timezone'] = message.text
+                    bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат:\nшш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
+                    bot.register_next_step_handler(message, ask_place)
+            def ask_place(message):
+                user_id = message.chat.id
+                lat, lon = map(float, message.text.split(","))
+                user_data[user_id]['lat'] = lat
+                user_data[user_id]['lon'] = lon
+                add_user(user_id)
+                info = f"""✅ Данные сохранены:
+            
+        👤 Имя: {user_data[user_id].get('name', 'Не указано')}
+        📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
+        ⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
+        🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
+        🏙️ Место рождения: {user_data[user_id].get('place', 'Не указано')}
+            
+            Что тебя интересует?"""
 
-👤 Имя: {user_data[user_id].get('name', 'Не указано')}
-📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
-⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
-🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
-🏙️ Место рождения: {user_data[user_id].get('place', 'Не указано')}
-
-    Что тебя интересует?"""
-
-    bot.send_message(message.chat.id, info, reply_markup=menu)
+                bot.send_message(message.chat.id, info, reply_markup=menu)
+        intro(message)
 
 
 
@@ -352,6 +402,7 @@ def text_messages(message):
                                  "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
             else:
+                bot.send_message(message.chat.id, "⏳ Анализирую...")
                 def ai_analysis(message):
                    response = client.chat.completions.create(
                    model="gpt-4.1-mini",
@@ -375,6 +426,7 @@ def text_messages(message):
             else:
                 bot.send_message(message.chat.id, "Что тебя интересует?",
                                  reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "⏳ Думаю...")
                 def ai_answer(message):
                    response = client.chat.completions.create(
                    model="gpt-4.1-mini",
@@ -389,9 +441,13 @@ def text_messages(message):
         elif message.text == "🌌Рассчитать натальную карту" :
             user_id = message.chat.id
             if user_id in user_data:
-                star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
+                bot.send_message(message.chat.id, "⏳ Рассчитываю...")
+                if user_id in user_starcharts:
+                    star_chart = user_starcharts[user_id]
+                else:
+                    star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
                 user_starcharts[user_id] = star_chart
-                """add_starchart(user_id, message.from_user.username)"""
+                add_starchart(user_id)
                 filename = f"natal_chart_{user_id}.png"
                 draw_natal_chart(star_chart, filename)
                 with open(filename, "rb") as photo:
@@ -401,6 +457,7 @@ def text_messages(message):
                         caption="🌌 Ваша натальная карта",
                         reply_markup=menu
                     )
+                os.remove(filename)
                 chart_text = "🌌 Ваша натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
@@ -412,8 +469,11 @@ def text_messages(message):
                 chart_text += f"   MC:  {data['углы']['midheaven']['знак']} {data['углы']['midheaven']['градус']}°\n"
                 chart_text += f"   DSC: {data['углы']['descendant']['знак']}\n"
                 chart_text += f"   IC:  {data['углы']['imum_coeli']['знак']}\n\n"
-                chart_text += format_houses_output(calculate_houses(year=user_data[user_id]['year'], month=user_data[user_id]['month'], day=user_data[user_id]['day'], hour=user_data[user_id]['hour'], minute=user_data[user_id]['minute']
-                                                                , lat=user_data[user_id]['lat'], lon=user_data[user_id]['lon']))
+                chart_text += format_houses_output(
+                    calculate_houses(year=user_data[user_id]['year'], month=user_data[user_id]['month'],
+                                     day=user_data[user_id]['day'], hour=user_data[user_id]['hour'],
+                                     minute=user_data[user_id]['minute']
+                                     , lat=user_data[user_id]['lat'], lon=user_data[user_id]['lon']))
                 bot.send_message(message.chat.id, chart_text, reply_markup=menu)
             else:
                 bot.send_message(message.chat.id,
@@ -422,3 +482,4 @@ def text_messages(message):
 
 
 bot.infinity_polling()
+con.close()
