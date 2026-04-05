@@ -20,7 +20,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('bot.log')
+        logging.FileHandler('bot.log', encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
@@ -52,10 +52,10 @@ with conn():
             with con:
                 cursor.execute("""
                   CREATE TABLE IF NOT EXISTS users (
-                     id VARCHAR(200) PRIMARY KEY,
-                     username VARCHAR(200),
-                     data VARCHAR(20000),
-                     starchart VARCHAR(2000000)
+                     id TEXT PRIMARY KEY,
+                     username TEXT,
+                     data TEXT,
+                     starchart TEXT
                   );
                 """)
 def add_user(user_id):
@@ -80,9 +80,6 @@ def add_starchart(user_id):
             logger.error(f"DB error for user {user_id}: {e}")
         con.commit()
 
-
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def calculate_chart(year, month, day, hour, minute, lat, lon):
@@ -219,18 +216,23 @@ def calculate_angles(observer, planets_positions):
     }
 def draw_natal_chart(chart_data, output_file="natal_chart.png"):
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw={'projection': 'polar'})
+
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+
     ax.set_theta_zero_location("E")
     ax.set_theta_direction(-1)
-    ax.set_ylim(0, 1.1)
+    ax.set_ylim(0, 1.2)
     ax.set_yticklabels([])
     ax.set_xticklabels([])
     ax.grid(False)
-    ax.set_title("Натальная карта", va='bottom', fontsize=16)
+
+    ax.set_title("Натальная карта", fontsize=16, pad=15)
 
     theta = np.linspace(0, 2 * np.pi, 720)
-    ax.plot(theta, np.full_like(theta, 1.0), linewidth=2)
-    ax.plot(theta, np.full_like(theta, 0.75), linewidth=1)
-    ax.plot(theta, np.full_like(theta, 0.45), linewidth=1)
+
+    ax.plot(theta, np.full_like(theta, 1.0), linewidth=1)
+    ax.plot(theta, np.full_like(theta, 0.75), linewidth=0.7)
 
     zodiac_signs = [
         'Овен', 'Телец', 'Близнецы', 'Рак', 'Лев', 'Дева',
@@ -239,24 +241,17 @@ def draw_natal_chart(chart_data, output_file="natal_chart.png"):
 
     for i in range(12):
         start_deg = i * 30
-        angle = start_deg * math.pi / 180
-        ax.plot([angle, angle], [0.75, 1.0], linewidth=1)
-        text_angle = (start_deg+15) * math.pi / 180
+        angle = np.deg2rad(start_deg)
+
+        ax.plot([angle, angle], [0.75, 1.0], linewidth=0.7)
+
         ax.text(
-            text_angle,
+            np.deg2rad(start_deg + 15),
             0.87,
             zodiac_signs[i],
             ha='center',
             va='center',
-            fontsize=10
-        )
-        ax.text(
-            angle,
-            1.03,
-            f"{start_deg}°",
-            ha='center',
-            va='center',
-            fontsize=8
+            fontsize=9
         )
 
     planet_labels = {
@@ -272,35 +267,81 @@ def draw_natal_chart(chart_data, output_file="natal_chart.png"):
         'Плутон': '♇',
     }
 
-    used_angles = []
-    for planet, data in chart_data.items():
-        deg = data['прямое_восхождение'] % 360
-        angle = deg * math.pi / 180
-        point_radius = 0.58
-        text_radius = 0.48
-        for used_deg in used_angles:
-            if abs(deg - used_deg) < 8:
-                point_radius += 0.05
-                text_radius -= 0.05
-        used_angles.append(deg)
-        ax.scatter([angle], [point_radius], s=50)
-        label = planet_labels.get(planet, planet)
-        ax.text(
-            angle,
-            text_radius,
-            label,
-            ha='center',
-            va='center',
-            fontsize=13
-        )
-        ax.text(
-            angle,
-            0.67,
-            f"{planet}\n{deg:.1f}°",
-            ha='center',
-            va='center',
-            fontsize=8
-        )
+    planet_colors = {
+        'Солнце': 'orange',
+        'Луна': 'gray',
+        'Меркурий': 'black',
+        'Венера': 'pink',
+        'Марс': 'red',
+        'Юпитер': 'brown',
+        'Сатурн': 'gold',
+        'Уран': 'teal',
+        'Нептун': 'blue',
+        'Плутон': 'purple',
+    }
+
+    planets = [(p, d['прямое_восхождение'] % 360) for p, d in chart_data.items()]
+    planets.sort(key=lambda x: x[1])
+
+    clusters = []
+    cluster = [planets[0]]
+
+    for i in range(1, len(planets)):
+        if abs(planets[i][1] - planets[i - 1][1]) < 10:
+            cluster.append(planets[i])
+        else:
+            clusters.append(cluster)
+            cluster = [planets[i]]
+
+    clusters.append(cluster)
+
+    for cluster in clusters:
+        n = len(cluster)
+
+        for i, (planet, deg) in enumerate(cluster):
+            angle = np.deg2rad(deg)
+            color = planet_colors.get(planet, "black")
+
+            r_point = 0.6
+
+            ax.scatter(angle, r_point, s=40, color=color)
+
+            offset = (i - (n - 1) / 2) * 0.07
+            r_text = 0.8 + offset
+
+            ax.plot([angle, angle], [r_point, r_text], linewidth=0.7)
+
+            label = planet_labels.get(planet, planet)
+
+            ax.text(
+                angle,
+                r_text,
+                f"{label} {int(deg)}°",
+                ha='center',
+                va='center',
+                fontsize=9
+            )
+
+    angles = next(iter(chart_data.values()))['углы']
+
+    asc_deg = angles['ascendant']['координата']
+    mc_deg = angles['midheaven']['координата']
+    dsc_deg = angles['descendant']['координата']
+    ic_deg = angles['imum_coeli']['координата']
+
+    asc_angle = np.deg2rad(asc_deg)
+    mc_angle = np.deg2rad(mc_deg)
+    dsc_angle = np.deg2rad(dsc_deg)
+    ic_angle = np.deg2rad(ic_deg)
+
+    ax.plot([asc_angle, asc_angle], [0, 1.0], linestyle='--', linewidth=1)
+    ax.plot([mc_angle, mc_angle], [0, 1.0], linestyle='--', linewidth=1)
+
+    ax.text(asc_angle, 1.08, "ASC", ha='center', va='center', fontsize=10, fontweight='bold')
+    ax.text(mc_angle, 1.08, "MC", ha='center', va='center', fontsize=10, fontweight='bold')
+    ax.text(dsc_angle, 1.08, "DSC", ha='center', va='center', fontsize=10)
+    ax.text(ic_angle, 1.08, "IC", ha='center', va='center', fontsize=10)
+
     plt.savefig(output_file, bbox_inches='tight', dpi=200)
     plt.close(fig)
 
@@ -311,7 +352,8 @@ starchart  = types.KeyboardButton("🌌Рассчитать натальную �
 personality = types.KeyboardButton("💫Анализ личности")
 ask_question = types.KeyboardButton("❔Задать вопрос")
 match = types.KeyboardButton("💞Совместимость")
-menu.add(profile, starchart, personality, ask_question, match)
+horoscope = types.KeyboardButton("🔮Гороскоп")
+menu.add(profile, starchart, personality, ask_question, match, horoscope)
 
 back = types.ReplyKeyboardMarkup(resize_keyboard=True)
 back_button=types.KeyboardButton("Назад")
@@ -330,6 +372,12 @@ true_false = types.ReplyKeyboardMarkup(resize_keyboard=True)
 truebutton = types.KeyboardButton("Да")
 falsebutton = types.KeyboardButton("Нет")
 true_false.add(truebutton, falsebutton)
+
+markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+today_btn = types.KeyboardButton("Сегодня")
+tomorrow_btn = types.KeyboardButton("Завтра")
+custom_btn = types.KeyboardButton("Другой день")
+markup.add(today_btn, tomorrow_btn, custom_btn)
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
@@ -390,42 +438,78 @@ def start_message(message):
                     bot.send_message(message.chat.id, "Неверный формат времени, введите еще раз. Используйте чч:мм")
                     bot.register_next_step_handler(message, ask_time)
                     return
-                bot.send_message(message.chat.id, "Введите часовой пояс(только n)\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "Введите часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, ask_timezone)
             def ask_timezone(message):
                     user_id = message.chat.id
-                    user_data[user_id]['timezone'] = message.text
+                    user_data[user_id]['timezone'] = message.text.replace("GMT", "").strip()
                     if not (int(user_data[user_id]['timezone'])>=-11 and int(user_data[user_id]['timezone'])<=12):
-                        bot.send_message(message.chat.id, "Часовой пояс не подходит. Вводите только цифру после GMT, например, 3")
+                        bot.send_message(message.chat.id, "Часовой пояс не подходит. Введите еще раз")
                         bot.register_next_step_handler(message, ask_timezone)
                         return
-                    bot.send_message(message.chat.id, "Введите координаты места рождения\nФормат:\nшш (с.ш.), дд (в.д.)", reply_markup=types.ReplyKeyboardRemove())
+                    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                    geo_btn = types.KeyboardButton("📍 Отправить геолокацию", request_location=True)
+                    markup.add(geo_btn)
+
+                    bot.send_message(
+                        message.chat.id,
+                        "Отправь геолокацию 📍 или введи координаты (55.75, 37.61):",
+                        reply_markup=markup
+                    )
                     bot.register_next_step_handler(message, ask_place)
+
             def ask_place(message):
                 user_id = message.chat.id
+                if message.location:
+                    lat = message.location.latitude
+                    lon = message.location.longitude
+                    user_data[user_id]['lat'] = lat
+                    user_data[user_id]['lon'] = lon
+                    user_data[user_id]['place'] = f"{lat}, {lon}"
+                    add_user(user_id)
+                    info = f"""✅ Данные сохранены:
+
+            👤 Имя: {user_data[user_id].get('name', 'Не указано')}
+            📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
+            ⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
+            🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
+            🏙️ Место рождения: {user_data[user_id].get('place', 'Не указано')}
+
+            Что тебя интересует?"""
+
+                    bot.send_message(message.chat.id, info, reply_markup=menu)
+                    return
                 user_data[user_id]['place'] = message.text
+
                 try:
-                    lat, lon = map(float, message.text.split(","))
+                    lat, lon = map(float, message.text.replace(" ", "").split(","))
                     if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                         raise ValueError
                 except:
-                    bot.send_message(message.chat.id, "Неверные координаты, введите еще раз. Формат: 55.75, 37.61")
+                    bot.send_message(
+                        message.chat.id,
+                        "Неверные координаты, отправь геолокацию 📍 или введи в формате: 55.75, 37.61"
+                    )
                     bot.register_next_step_handler(message, ask_place)
                     return
+
                 user_data[user_id]['lat'] = lat
                 user_data[user_id]['lon'] = lon
+
                 add_user(user_id)
+
                 info = f"""✅ Данные сохранены:
-            
-        👤 Имя: {user_data[user_id].get('name', 'Не указано')}
-        📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
-        ⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
-        🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
-        🏙️ Место рождения: {user_data[user_id].get('place', 'Не указано')}
-            
+
+            👤 Имя: {user_data[user_id].get('name', 'Не указано')}
+            📅 Дата рождения: {user_data[user_id].get('date', 'Не указано')}
+            ⏰ Время рождения: {user_data[user_id].get('time', 'Не указано')}
+            🌍 Часовой пояс: {user_data[user_id].get('timezone', 'Не указано')}
+            🏙️ Место рождения: {user_data[user_id].get('place', 'Не указано')}
+
             Что тебя интересует?"""
 
                 bot.send_message(message.chat.id, info, reply_markup=menu)
+
             intro(message)
 
 
@@ -533,7 +617,7 @@ def text_messages(message):
                                 bot.send_message(message.chat.id, "Введите обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def timezonef(message):
-                                    user_data[user_id]['timezone'] = message.text
+                                    user_data[user_id]['timezone'] = message.text.replace("GMT", "").strip()
                                     if not (int(user_data[user_id]['timezone']) >= -11 and int(
                                             user_data[user_id]['timezone']) <= 12):
                                         bot.send_message(message.chat.id,
@@ -550,38 +634,58 @@ def text_messages(message):
                                             logger.error(f"DB error for user {user_id}: {e}")
 
                                         con.commit()
-                                    bot.send_message(message.chat.id, "✅ Часовой пояс обновлено!")
+                                    bot.send_message(message.chat.id, "✅ Часовой пояс обновлен!")
                                     bot.send_message(message.chat.id, "Не забудьте пересчитать свою натальную карту!",
                                                      reply_markup=menu)
                                 bot.register_next_step_handler(message, timezonef)
                             if message.text == "Координаты места рождения":
-                                bot.send_message(message.chat.id, "Введите обновленные данные:", reply_markup=types.ReplyKeyboardRemove())
+                                geo = types.ReplyKeyboardMarkup(resize_keyboard=True)
+                                geo_btn = types.KeyboardButton("📍 Отправить геолокацию", request_location=True)
+                                geo.add(geo_btn)
+                                bot.send_message(
+                                    message.chat.id,
+                                    "Отправь обновленную геолокацию или введи координаты вручную (Пример: 55.75, 37.61):",
+                                    reply_markup=geo
+                                )
                                 def placef(message):
-                                    user_data[user_id]['place'] = message.text
-                                    try:
-                                        lat, lon = map(float, message.text.split(","))
-                                        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-                                            raise ValueError
-                                    except:
-                                        bot.send_message(message.chat.id,
-                                                         "Неверные координаты, введите еще раз. Формат: 55.75, 37.61")
-                                        bot.register_next_step_handler(message, placef)
-                                        return
-                                    user_data[user_id]['lat'] = lat
-                                    user_data[user_id]['lon'] = lon
+                                    user_id = message.chat.id
+                                    if message.location:
+                                        lat = message.location.latitude
+                                        lon = message.location.longitude
+                                        user_data[user_id]['lat'] = lat
+                                        user_data[user_id]['lon'] = lon
+                                        user_data[user_id]['place'] = f"{lat}, {lon}"
+                                    else:
+                                        user_data[user_id]['place'] = message.text
+                                        try:
+                                            lat, lon = map(float, message.text.replace(" ", "").split(","))
+                                            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                                                raise ValueError
+                                        except:
+                                            bot.send_message(
+                                                message.chat.id,
+                                                "Неверные координаты, отправь геолокацию 📍 или введи в формате: 55.75, 37.61"
+                                            )
+                                            bot.register_next_step_handler(message, placef)
+                                            return
+                                        user_data[user_id]['lat'] = lat
+                                        user_data[user_id]['lon'] = lon
                                     with conn() as con:
                                         cursor = con.cursor()
                                         try:
-                                            cursor.execute('UPDATE users SET data = ? WHERE id = ?',
-                                                           (json.dumps(user_data[user_id]), user_id))
+                                            cursor.execute(
+                                                'UPDATE users SET data = ? WHERE id = ?',
+                                                (json.dumps(user_data[user_id]), user_id)
+                                            )
                                             logger.info(f"User {user_id} saved to DB")
                                         except Exception as e:
                                             logger.error(f"DB error for user {user_id}: {e}")
-
                                         con.commit()
-                                    bot.send_message(message.chat.id, "✅ Координаты обновлены!")
-                                    bot.send_message(message.chat.id, "Не забудьте пересчитать свою натальную карту!",
-                                                     reply_markup=menu)
+                                    bot.send_message(
+                                        message.chat.id,
+                                        "✅ Координаты обновлены!",
+                                        reply_markup=menu
+                                    )
                                 bot.register_next_step_handler(message, placef)
 
                         bot.register_next_step_handler(message, update)
@@ -599,6 +703,7 @@ def text_messages(message):
             else:
                 bot.send_message(message.chat.id, "⏳ Анализирую...")
                 def ai_analysis(message):
+                   reply = "Произошла ошибка, попробуйте позже 🙏"
                    try:
                         logger.info(f"AI request for user {user_id}")
                         response = client.chat.completions.create(
@@ -625,6 +730,7 @@ def text_messages(message):
                 bot.send_message(message.chat.id, "Что тебя интересует?",
                                  reply_markup=types.ReplyKeyboardRemove())
                 def ai_answer(message):
+                    reply = "Произошла ошибка, попробуйте позже 🙏"
                     bot.send_message(message.chat.id, "⏳ Думаю...")
                     try:
                         logger.info(f"AI request for user {user_id}")
@@ -636,8 +742,7 @@ def text_messages(message):
                                 {"role": "user", "content": message.text}
                             ]
                         )
-                        reply = response.choices[0].message.contenttypes.ReplyKeyboardRemove()
-                        bot.send_message(message.chat.id, reply, reply_markup=menu)
+                        reply = response.choices[0].message.content
                     except Exception as e:
                         logger.error(f"AI error for user {user_id}: {e}")
                     bot.send_message(message.chat.id, reply, reply_markup=menu)
@@ -670,7 +775,8 @@ def text_messages(message):
                         )
                     except Exception as e:
                         logger.error(f"Send photo error: {e}")
-                os.remove(filename)
+                if os.path.exists(filename):
+                    os.remove(filename)
                 chart_text = "🌌 Ваша натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
@@ -720,6 +826,7 @@ def text_messages(message):
                                                      reply_markup=menu)
                                 else:
                                     def ai_match():
+                                        reply = "Произошла ошибка, попробуйте позже 🙏"
                                         try:
                                             logger.info(f"AI request for user {user_id}")
                                             response = client.chat.completions.create(
@@ -760,6 +867,53 @@ def text_messages(message):
                 bot.send_message(message.chat.id,
                                  "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
+        elif message.text == "🔮Гороскоп":
+            def ai_generate(message, date):
+                reply = "Произошла ошибка, попробуйте позже 🙏"
+                bot.send_message(message.chat.id, "⏳ Рассчитываю...")
+                try:
+                    logger.info(f"AI request for user {user_id}")
+                    response = client.chat.completions.create(
+                        model="gpt-4.1-mini",
+                        messages=[
+                            {"role": "system",
+                             "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Составь гороскоп на дату:{date}"}
+                        ]
+                    )
+                    reply = response.choices[0].message.content
+                except Exception as e:
+                    logger.error(f"AI error for user {user_id}: {e}")
+                bot.send_message(message.chat.id, reply, reply_markup=menu)
+            user_id = message.chat.id
+            if user_id in user_starcharts:
+                bot.send_message(message.chat.id, "Выбери день для гороскопа",
+                                 reply_markup=markup)
+                def horoscope_day(message):
+                    if message.text == "Сегодня":
+                        date = datetime.date.today()
+                        ai_generate(message, date)
+                    elif message.text == "Завтра":
+                        date = datetime.date.today() + datetime.timedelta(days=1)
+                        ai_generate(message, date)
+                    else:
+                        bot.send_message(message.chat.id, "Введите дату в формате ГГГГ-ММ-ДД:")
+                        def custom_date(message):
+                            try:
+                                date = datetime.datetime.strptime(message.text, "%Y-%m-%d").date()
+                                ai_generate(message, date)
+                            except ValueError:
+                                bot.send_message(message.chat.id, "Неверный формат. Попробуй еще раз (ГГГГ-ММ-ДД)")
+                                bot.register_next_step_handler(message, custom_date)
+                                return
+                        bot.register_next_step_handler(message, custom_date)
+                        return
+                bot.register_next_step_handler(message, horoscope_day)
+
+            else:
+                bot.send_message(message.chat.id,
+                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
+                                 reply_markup=menu)
+
 
 
 con.close()
