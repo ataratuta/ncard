@@ -82,11 +82,11 @@ def add_starchart(user_id):
 
 
 
-def calculate_chart(year, month, day, hour, minute, lat, lon):
+def calculate_chart(year, month, day, hour, minute, lat, lon, timezone):
     observer = ephem.Observer()
-    observer.lat = lat
-    observer.lon = lon
-    observer.date = f'{year}/{month}/{day} {hour}:{minute}:00'
+    observer.lat = str(lat)
+    observer.lon = str(lon)
+    observer.date = f"{year}/{month}/{day} {hour}:{minute}:00"
     celestial_bodies = {
         'Солнце': ephem.Sun(observer),
         'Луна': ephem.Moon(observer),
@@ -102,7 +102,7 @@ def calculate_chart(year, month, day, hour, minute, lat, lon):
     planets_positions = {}
     chart_data = {}
     angles = calculate_angles(observer, planets_positions)
-    houses = calculate_houses(year, month, day, hour, minute, lat, lon)
+    houses = calculate_houses(year, month, day, hour, minute, lat, lon, timezone)
     for name, body in celestial_bodies.items():
         constellation = ephem.constellation(body)
         ra_deg = float(body.ra) * 180 / ephem.pi
@@ -124,11 +124,11 @@ def zodiac_sign(ra_degrees):
     return signs[sign_index]
 
 
-def calculate_houses(year, month, day, hour, minute, lat, lon):
+def calculate_houses(year, month, day, hour, minute, lat, lon, timezone):
     observer = ephem.Observer()
     observer.lat = str(lat)
     observer.lon = str(lon)
-    observer.date = f'{year}/{month}/{day} {hour}:{minute}:00'
+    observer.date = f"{year}/{month}/{day} {hour}:{minute}:00"
     sidereal_time = observer.sidereal_time()
     st_degrees = float(sidereal_time) * 15
     houses = []
@@ -402,16 +402,16 @@ def start_message(message):
             def intro(message):
                 user_data[user_id] = {}
                 user_data[user_id]['username'] = message.from_user.username or str(message.from_user.id)
-                bot.send_message(message.chat.id, "Добрый день. Введите имя.", reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "Добрый день. Введи имя.", reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, ask_name)
             def ask_name(message):
                 user_id = message.chat.id
                 user_data[user_id]['name']=message.text
                 if not user_data[user_id]['name'].isalpha():
-                    bot.send_message(message.chat.id, "Имя должно содержать только буквы, введите еще раз")
+                    bot.send_message(message.chat.id, "Имя должно содержать только буквы, введи еще раз")
                     bot.register_next_step_handler(message, ask_name)
                     return
-                bot.send_message(message.chat.id, "Введите дату рождения\nФормат гггг:мм:дд", reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "Введи дату рождения\nФормат гггг:мм:дд", reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, ask_date)
             def ask_date(message):
                 user_id = message.chat.id
@@ -422,10 +422,10 @@ def start_message(message):
                 try:
                     datetime.datetime.strptime(message.text, "%Y:%m:%d")
                 except ValueError:
-                    bot.send_message(message.chat.id, "Неверный формат даты, введите еще раз. Используйте гггг:мм:дд")
+                    bot.send_message(message.chat.id, "Неверный формат даты, введи еще раз. Используй гггг:мм:дд")
                     bot.register_next_step_handler(message, ask_date)
                     return
-                bot.send_message(message.chat.id, "Введите время рождения\nФормат чч:мм", reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "Введи время рождения\nФормат чч:мм", reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, ask_time)
             def ask_time(message):
                 user_id = message.chat.id
@@ -435,16 +435,16 @@ def start_message(message):
                 try:
                     datetime.datetime.strptime(message.text, "%H:%M")
                 except ValueError:
-                    bot.send_message(message.chat.id, "Неверный формат времени, введите еще раз. Используйте чч:мм")
+                    bot.send_message(message.chat.id, "Неверный формат времени, введи еще раз. Используй чч:мм")
                     bot.register_next_step_handler(message, ask_time)
                     return
-                bot.send_message(message.chat.id, "Введите часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "Введи часовой пояс\nФормат GMT+n", reply_markup=types.ReplyKeyboardRemove())
                 bot.register_next_step_handler(message, ask_timezone)
             def ask_timezone(message):
                     user_id = message.chat.id
                     user_data[user_id]['timezone'] = message.text.replace("GMT", "").strip()
                     if not (int(user_data[user_id]['timezone'])>=-11 and int(user_data[user_id]['timezone'])<=12):
-                        bot.send_message(message.chat.id, "Часовой пояс не подходит. Введите еще раз")
+                        bot.send_message(message.chat.id, "Часовой пояс не подходит. Введи еще раз")
                         bot.register_next_step_handler(message, ask_timezone)
                         return
                     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -536,13 +536,13 @@ def text_messages(message):
                         bot.send_message(message.chat.id, "Что ты хочешь изменить?", reply_markup=options)
                         def update(message):
                             if message.text == "Имя":
-                                bot.send_message(message.chat.id, "Введите обновленные данные:",
+                                bot.send_message(message.chat.id, "Введи обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def namef(message):
                                     user_data[user_id]['name'] = message.text
                                     if not user_data[user_id]['name'].isalpha():
                                         bot.send_message(message.chat.id,
-                                                         "Имя должно содержать только буквы, введите еще раз")
+                                                         "Имя должно содержать только буквы, введи еще раз")
                                         bot.register_next_step_handler(message, namef)
                                         return
                                     with conn() as con:
@@ -558,7 +558,7 @@ def text_messages(message):
                                     bot.send_message(message.chat.id, "✅ Имя обновлено!", reply_markup=menu)
                                 bot.register_next_step_handler(message, namef)
                             if message.text == "Дата рождения":
-                                bot.send_message(message.chat.id, "Введите обновленные данные:",
+                                bot.send_message(message.chat.id, "Введи обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def datef(message):
                                     user_data[user_id]['date'] = message.text
@@ -566,7 +566,7 @@ def text_messages(message):
                                         datetime.datetime.strptime(message.text, "%Y:%m:%d")
                                     except ValueError:
                                         bot.send_message(message.chat.id,
-                                                         "Неверный формат даты, введите еще раз. Используйте гггг:мм:дд")
+                                                         "Неверный формат даты, введи еще раз. Используй гггг:мм:дд")
                                         bot.register_next_step_handler(message, datef)
                                         return
                                     user_data[user_id]['year'] = message.text[0:4]
@@ -582,12 +582,12 @@ def text_messages(message):
                                             logger.error(f"DB error for user {user_id}: {e}")
 
                                         con.commit()
-                                    bot.send_message(message.chat.id, "✅ Дата рождения обновленф!")
-                                    bot.send_message(message.chat.id, "Не забудьте пересчитать свою натальную карту!",
+                                    bot.send_message(message.chat.id, "✅ Дата рождения обновленa!")
+                                    bot.send_message(message.chat.id, "Не забудь пересчитать свою натальную карту!",
                                                      reply_markup=menu)
                                 bot.register_next_step_handler(message, datef)
                             if message.text == "Время рождения":
-                                bot.send_message(message.chat.id, "Введите обновленные данные:",
+                                bot.send_message(message.chat.id, "Введи обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def timef(message):
                                     user_data[user_id]['time'] = message.text
@@ -595,7 +595,7 @@ def text_messages(message):
                                         datetime.datetime.strptime(message.text, "%H:%M")
                                     except ValueError:
                                         bot.send_message(message.chat.id,
-                                                         "Неверный формат времени, введите еще раз. Используйте чч:мм")
+                                                         "Неверный формат времени, введи еще раз. Используй чч:мм")
                                         bot.register_next_step_handler(message, timef)
                                         return
                                     user_data[user_id]['hour'] = message.text[0:2]
@@ -610,18 +610,18 @@ def text_messages(message):
                                             logger.error(f"DB error for user {user_id}: {e}")
                                         con.commit()
                                     bot.send_message(message.chat.id, "✅ Время рождения обновлено!")
-                                    bot.send_message(message.chat.id, "Не забудьте пересчитать свою натальную карту!",
+                                    bot.send_message(message.chat.id, "Не забудь пересчитать свою натальную карту!",
                                                      reply_markup=menu)
                                 bot.register_next_step_handler(message, timef)
                             if message.text == "Часовой пояс":
-                                bot.send_message(message.chat.id, "Введите обновленные данные:",
+                                bot.send_message(message.chat.id, "Введи обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def timezonef(message):
                                     user_data[user_id]['timezone'] = message.text.replace("GMT", "").strip()
                                     if not (int(user_data[user_id]['timezone']) >= -11 and int(
                                             user_data[user_id]['timezone']) <= 12):
                                         bot.send_message(message.chat.id,
-                                                         "Часовой пояс не подходит. Вводите только цифру после GMT, например, 3")
+                                                         "Часовой пояс не подходит. Вводи только цифру после GMT, например, 3")
                                         bot.register_next_step_handler(message, timezonef)
                                         return
                                     with conn() as con:
@@ -635,7 +635,7 @@ def text_messages(message):
 
                                         con.commit()
                                     bot.send_message(message.chat.id, "✅ Часовой пояс обновлен!")
-                                    bot.send_message(message.chat.id, "Не забудьте пересчитать свою натальную карту!",
+                                    bot.send_message(message.chat.id, "Не забудь пересчитать свою натальную карту!",
                                                      reply_markup=menu)
                                 bot.register_next_step_handler(message, timezonef)
                             if message.text == "Координаты места рождения":
@@ -692,13 +692,13 @@ def text_messages(message):
                 bot.register_next_step_handler(message, backf)
             else:
                 bot.send_message(message.chat.id,
-                                 "Профиль не заполнен. Нажмите /start для начала.",
+                                 "Профиль не заполнен. Нажми /start для начала.",
                                  reply_markup=menu)
         elif message.text == "💫Анализ личности" :
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
+                                 "Натальная карта не создана. Нажми *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
             else:
                 bot.send_message(message.chat.id, "⏳ Анализирую...")
@@ -710,7 +710,7 @@ def text_messages(message):
                             model="gpt-4.1-mini",
                             messages=[
                                 {"role": "system",
-                                 "content": f"Ты астролог пользователя. Вот его натальная карта: {user_starcharts[user_id]}"},
+                                 "content": f"Ты астролог пользователя. Вот его натальная карта: {user_starcharts[user_id]}(отправь пользователю только готовый ответ, чтобы твой ответ можно было целиком отправить пользователю)"},
                                 {"role": "user", "content": "Проанализируй мою личность"}
                             ]
                         )
@@ -724,7 +724,7 @@ def text_messages(message):
             user_id = message.chat.id
             if user_id not in user_starcharts:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
+                                 "Натальная карта не создана. Нажми *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
             else:
                 bot.send_message(message.chat.id, "Что тебя интересует?",
@@ -738,7 +738,7 @@ def text_messages(message):
                             model="gpt-4.1-mini",
                             messages=[
                                 {"role": "system",
-                                 "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос"},
+                                 "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Ответь на его вопрос(отправь только готовый ответ, чтобы твой ответ можно было целиком отправить пользователю)"},
                                 {"role": "user", "content": message.text}
                             ]
                         )
@@ -752,11 +752,11 @@ def text_messages(message):
             if user_id in user_data:
                 bot.send_message(message.chat.id, "⏳ Рассчитываю...")
                 try:
-                    star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'])
+                    star_chart = calculate_chart(user_data[user_id]['year'], user_data[user_id]['month'], user_data[user_id]['day'], user_data[user_id]['hour'], user_data[user_id]['minute'], user_data[user_id]['lat'], user_data[user_id]['lon'], user_data[user_id]['timezone'])
                     logger.info(f"Chart calculated for user {user_id}")
                 except Exception as e:
                     logger.error(f"Chart calculating error: {e}")
-
+                    bot.send_message(message.chat.id, "Ошибка расчета карты, попробуйте позже", reply_markup=menu)
                 user_starcharts[user_id] = star_chart
                 add_starchart(user_id)
                 filename = f"natal_chart_{user_id}.png"
@@ -770,14 +770,14 @@ def text_messages(message):
                         bot.send_photo(
                             message.chat.id,
                             photo,
-                            caption="🌌 Ваша натальная карта",
+                            caption="🌌 Твоя натальная карта",
                             reply_markup=menu
                         )
                     except Exception as e:
                         logger.error(f"Send photo error: {e}")
                 if os.path.exists(filename):
                     os.remove(filename)
-                chart_text = "🌌 Ваша натальная карта:\n\n"
+                chart_text = "🌌 Твоя натальная карта:\n\n"
                 for planet, data in star_chart.items():
                     chart_text += f"✨ {planet}:\n"
                     chart_text += f"   Знак: {data['знак_зодиака']}\n"
@@ -792,16 +792,18 @@ def text_messages(message):
                     calculate_houses(year=user_data[user_id]['year'], month=user_data[user_id]['month'],
                                      day=user_data[user_id]['day'], hour=user_data[user_id]['hour'],
                                      minute=user_data[user_id]['minute']
-                                     , lat=user_data[user_id]['lat'], lon=user_data[user_id]['lon']))
+                                     , lat=user_data[user_id]['lat'], lon=user_data[user_id]['lon'],
+                                     timezone=user_data[user_id]['timezone']),
+                                      )
                 bot.send_message(message.chat.id, chart_text, reply_markup=menu)
             else:
                 bot.send_message(message.chat.id,
-                                 "Для расчета натальной карты необходимо заполнить профиль. Нажмите /start для начала.",
+                                 "Для расчета натальной карты необходимо заполнить профиль. Нажми /start для начала.",
                                  reply_markup=menu)
         elif message.text == "💞Совместимость":
             user_id = message.chat.id
             if user_id in user_starcharts:
-                bot.send_message(message.chat.id, "С кем вы хотите рассчитать совместимость?\nОтправьте юз", reply_markup=ReplyKeyboardRemove())
+                bot.send_message(message.chat.id, "С кем ты хотешь рассчитать совместимость?\nОтправь юз", reply_markup=ReplyKeyboardRemove())
                 def matchf(message):
                     user_id = message.chat.id
                     username = message.text[1:]
@@ -812,8 +814,9 @@ def text_messages(message):
                         result = cursor.fetchone()
                         if not result:
                             bot.send_message(message.chat.id,
-                                             "Этот человек не регистрировался в боте! Попробуйте еще раз",
+                                             "Этот человек не регистрировался в боте! Попробуй еще раз",
                                              reply_markup=menu)
+
                         else:
                             with conn() as con:
                                 cursor = con.cursor()
@@ -822,11 +825,12 @@ def text_messages(message):
                                 stchart = json.loads(cursor.fetchone()[0])
                                 if not stchart:
                                     bot.send_message(message.chat.id,
-                                                     "Этот человек не рассчитал натальную карту! Попробуйте еще раз",
+                                                     "Этот человек не рассчитал натальную карту! Попробуй еще раз",
                                                      reply_markup=menu)
+
                                 else:
                                     def ai_match():
-                                        reply = "Произошла ошибка, попробуйте позже 🙏"
+                                        reply = "Произошла ошибка, попробуй позже 🙏"
                                         try:
                                             logger.info(f"AI request for user {user_id}")
                                             response = client.chat.completions.create(
@@ -844,7 +848,7 @@ def text_messages(message):
                                     bot.send_message(message.chat.id,
                                                      res)
                                     bot.send_message(message.chat.id,
-                                                     f"Хотите ли вы отправить результаты проверки @{username}?",
+                                                     f"Хочешь отправить результаты проверки @{username}?",
                                                      reply_markup=true_false)
                                     def tf(message):
                                         if message.text == "Да":
@@ -860,16 +864,20 @@ def text_messages(message):
                                             bot.send_message(message.chat.id,
                                                              "Отправили, что еще тебя интересует?",
                                                              reply_markup=menu)
+                                        else:
+                                            bot.send_message(message.chat.id,
+                                                             "Что еще тебя интересует?",
+                                                             reply_markup=menu)
                                     bot.register_next_step_handler(message, tf)
 
                 bot.register_next_step_handler(message, matchf)
             else:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
+                                 "Натальная карта не создана. Нажми *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
         elif message.text == "🔮Гороскоп":
             def ai_generate(message, date):
-                reply = "Произошла ошибка, попробуйте позже 🙏"
+                reply = "Произошла ошибка, попробуй позже 🙏"
                 bot.send_message(message.chat.id, "⏳ Рассчитываю...")
                 try:
                     logger.info(f"AI request for user {user_id}")
@@ -877,7 +885,7 @@ def text_messages(message):
                         model="gpt-4.1-mini",
                         messages=[
                             {"role": "system",
-                             "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Составь гороскоп на дату:{date}"}
+                             "content": f"Ты астролог пользователя, вот его натальная карта:{user_starcharts[user_id]} Составь гороскоп на дату:{date}(отправь только готовый ответ, чтобы твой ответ можно было целиком отправить пользователю)"}
                         ]
                     )
                     reply = response.choices[0].message.content
@@ -896,7 +904,7 @@ def text_messages(message):
                         date = datetime.date.today() + datetime.timedelta(days=1)
                         ai_generate(message, date)
                     else:
-                        bot.send_message(message.chat.id, "Введите дату в формате ГГГГ-ММ-ДД:")
+                        bot.send_message(message.chat.id, "Введи дату в формате ГГГГ-ММ-ДД:")
                         def custom_date(message):
                             try:
                                 date = datetime.datetime.strptime(message.text, "%Y-%m-%d").date()
@@ -911,7 +919,7 @@ def text_messages(message):
 
             else:
                 bot.send_message(message.chat.id,
-                                 "Натальная карта не создана. Нажмите *🌌Рассчитать натальную карту* для создания",
+                                 "Натальная карта не создана. Нажми *🌌Рассчитать натальную карту* для создания",
                                  reply_markup=menu)
 
 
