@@ -1,6 +1,8 @@
 import logging
 import math
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import sqlite3 as sl
 import telebot
@@ -12,7 +14,7 @@ import ephem
 from openai import OpenAI
 import json
 import datetime
-from datetime import datetime, timezone as timez, timedelta
+from datetime import datetime, date,  timezone as timez, timedelta
 
 from telebot.types import ReplyKeyboardRemove
 
@@ -325,7 +327,7 @@ def draw_natal_chart(chart_data, output_file="natal_chart.png"):
             angle = np.deg2rad(deg)
             color = planet_colors.get(planet, "black")
 
-            r_point = 0.6
+            r_point = 0.6 + (i - (n-1)/2)*0.03
 
             ax.scatter(angle, r_point, s=40, color=color)
 
@@ -387,11 +389,12 @@ back.add(back_button, change)
 
 options = types.ReplyKeyboardMarkup(resize_keyboard=True)
 name=types.KeyboardButton("Имя")
-date=types.KeyboardButton("Дата рождения")
-time=types.KeyboardButton("Время рождения")
+datebtn=types.KeyboardButton("Дата рождения")
+timebtn=types.KeyboardButton("Время рождения")
 gmt=types.KeyboardButton("Часовой пояс")
 place=types.KeyboardButton("Координаты места рождения")
-options.add(name, date, time, gmt, place)
+backb=types.KeyboardButton("Назад")
+options.add(name, datebtn, timebtn, gmt, place, backb)
 
 true_false = types.ReplyKeyboardMarkup(resize_keyboard=True)
 truebutton = types.KeyboardButton("Да")
@@ -445,7 +448,7 @@ def start_message(message):
                 user_data[user_id]['month'] = message.text[5:7]
                 user_data[user_id]['day'] = message.text[8:]
                 try:
-                    datetime.datetime.strptime(message.text, "%Y:%m:%d")
+                    datetime.strptime(message.text, "%Y:%m:%d")
                 except ValueError:
                     bot.send_message(message.chat.id, "Неверный формат даты, введи еще раз. Используй гггг:мм:дд")
                     bot.register_next_step_handler(message, ask_date)
@@ -458,7 +461,7 @@ def start_message(message):
                 user_data[user_id]['hour']=message.text[0:2]
                 user_data[user_id]['minute'] = message.text[3:]
                 try:
-                    datetime.datetime.strptime(message.text, "%H:%M")
+                    datetime.strptime(message.text, "%H:%M")
                 except ValueError:
                     bot.send_message(message.chat.id, "Неверный формат времени, введи еще раз. Используй чч:мм")
                     bot.register_next_step_handler(message, ask_time)
@@ -560,7 +563,9 @@ def text_messages(message):
                     elif message.text == "Изменить данные":
                         bot.send_message(message.chat.id, "Что ты хочешь изменить?", reply_markup=options)
                         def update(message):
-                            if message.text == "Имя":
+                            if message.text == "Назад":
+                                bot.send_message(message.chat.id, "Что тебя интересует?", reply_markup=menu)
+                            elif message.text == "Имя":
                                 bot.send_message(message.chat.id, "Введи обновленные данные:",
                                                  reply_markup=types.ReplyKeyboardRemove())
                                 def namef(message):
@@ -588,7 +593,7 @@ def text_messages(message):
                                 def datef(message):
                                     user_data[user_id]['date'] = message.text
                                     try:
-                                        datetime.datetime.strptime(message.text, "%Y:%m:%d")
+                                        datetime.strptime(message.text, "%Y:%m:%d")
                                     except ValueError:
                                         bot.send_message(message.chat.id,
                                                          "Неверный формат даты, введи еще раз. Используй гггг:мм:дд")
@@ -617,7 +622,7 @@ def text_messages(message):
                                 def timef(message):
                                     user_data[user_id]['time'] = message.text
                                     try:
-                                        datetime.datetime.strptime(message.text, "%H:%M")
+                                        datetime.strptime(message.text, "%H:%M")
                                     except ValueError:
                                         bot.send_message(message.chat.id,
                                                          "Неверный формат времени, введи еще раз. Используй чч:мм")
@@ -923,17 +928,17 @@ def text_messages(message):
                                  reply_markup=markup)
                 def horoscope_day(message):
                     if message.text == "Сегодня":
-                        date = datetime.date.today()
-                        ai_generate(message, date)
+                        sdate = date.today()
+                        ai_generate(message, sdate)
                     elif message.text == "Завтра":
-                        date = datetime.date.today() + datetime.timedelta(days=1)
-                        ai_generate(message, date)
+                        sdate = date.today() + timedelta(days=1)
+                        ai_generate(message, sdate)
                     else:
                         bot.send_message(message.chat.id, "Введи дату в формате ГГГГ-ММ-ДД:")
                         def custom_date(message):
                             try:
-                                date = datetime.datetime.strptime(message.text, "%Y-%m-%d").date()
-                                ai_generate(message, date)
+                                sdate = datetime.strptime(message.text, "%Y-%m-%d").date()
+                                ai_generate(message, sdate)
                             except ValueError:
                                 bot.send_message(message.chat.id, "Неверный формат. Попробуй еще раз (ГГГГ-ММ-ДД)")
                                 bot.register_next_step_handler(message, custom_date)
