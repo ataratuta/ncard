@@ -12,6 +12,7 @@ import ephem
 from openai import OpenAI
 import json
 import datetime
+from datetime import datetime, timezone as timez, timedelta
 
 from telebot.types import ReplyKeyboardRemove
 
@@ -86,7 +87,18 @@ def calculate_chart(year, month, day, hour, minute, lat, lon, timezone):
     observer = ephem.Observer()
     observer.lat = str(lat)
     observer.lon = str(lon)
-    observer.date = f"{year}/{month}/{day} {hour}:{minute}:00"
+    timezone = float(timezone)
+    year = int(year)
+    month = int(month)
+    day = int(day)
+    hour = int(hour)
+    minute = int(minute)
+    lat = float(lat)
+    lon = float(lon)
+    tz = timez(timedelta(hours=timezone))
+    local_time = datetime(year, month, day, hour, minute, tzinfo=tz)
+    utc_time = local_time.astimezone(timez.utc)
+    observer.date = utc_time.strftime("%Y/%m/%d %H:%M:%S")
     celestial_bodies = {
         'Солнце': ephem.Sun(observer),
         'Луна': ephem.Moon(observer),
@@ -101,7 +113,7 @@ def calculate_chart(year, month, day, hour, minute, lat, lon, timezone):
     }
     planets_positions = {}
     chart_data = {}
-    angles = calculate_angles(observer, planets_positions)
+    angles = calculate_angles(observer)
     houses = calculate_houses(year, month, day, hour, minute, lat, lon, timezone)
     for name, body in celestial_bodies.items():
         constellation = ephem.constellation(body)
@@ -125,10 +137,21 @@ def zodiac_sign(ra_degrees):
 
 
 def calculate_houses(year, month, day, hour, minute, lat, lon, timezone):
+    timezone = float(timezone)
+    year = int(year)
+    month = int(month)
+    day = int(day)
+    hour = int(hour)
+    minute = int(minute)
+    lat = float(lat)
+    lon = float(lon)
     observer = ephem.Observer()
     observer.lat = str(lat)
     observer.lon = str(lon)
-    observer.date = f"{year}/{month}/{day} {hour}:{minute}:00"
+    tz = timez(timedelta(hours=timezone))
+    local_time = datetime(year, month, day, hour, minute, tzinfo=tz)
+    utc_time = local_time.astimezone(timez.utc)
+    observer.date = utc_time.strftime("%Y/%m/%d %H:%M:%S")
     sidereal_time = observer.sidereal_time()
     st_degrees = float(sidereal_time) * 15
     houses = []
@@ -181,7 +204,7 @@ def format_houses_output(houses_cusps):
             output += "   *Значение:* Карьера, цели, статус\n"
     return output
 
-def calculate_angles(observer, planets_positions):
+def calculate_angles(observer):
     sidereal_time = observer.sidereal_time()
     asc_ra = float(sidereal_time) * 15
     asc = asc_ra % 360
@@ -336,6 +359,8 @@ def draw_natal_chart(chart_data, output_file="natal_chart.png"):
 
     ax.plot([asc_angle, asc_angle], [0, 1.0], linestyle='--', linewidth=1)
     ax.plot([mc_angle, mc_angle], [0, 1.0], linestyle='--', linewidth=1)
+    ax.plot([dsc_angle, dsc_angle], [0, 1.0], linestyle='--', linewidth=1)
+    ax.plot([ic_angle, ic_angle], [0, 1.0], linestyle='--', linewidth=1)
 
     ax.text(asc_angle, 1.08, "ASC", ha='center', va='center', fontsize=10, fontweight='bold')
     ax.text(mc_angle, 1.08, "MC", ha='center', va='center', fontsize=10, fontweight='bold')
@@ -837,7 +862,7 @@ def text_messages(message):
                                                 model="gpt-4.1-mini",
                                                 messages=[
                                                     {"role": "system",
-                                                     "content": f"Ты астролог пользователя @{user_data[user_id]['username']}, вот его натальная карта:{user_starcharts[user_id]}, и натальная карта @{username}:{stchart}. Рассчитай их совместимость(отправь только результаты проверки, чтобы твой ответ можно было целиком отправить пользователю), отправь результат в процентах с расшифровкой"},
+                                                     "content": f"Ты астролог пользователя @{user_data[user_id]['username']}, вот его натальная карта:{user_starcharts[user_id]}, и натальная карта @{username}:{stchart}. Рассчитай их совместимость(отправь только результаты проверки, чтобы твой ответ можно было целиком отправить пользователю), отправь сначала результат в процентах, затем его расшифровку. Постарайся максимально приблизить результат к реальному, не бойся огорчить пользователя. нужен максимально правдоподобный результат"},
                                                 ]
                                             )
                                             reply = response.choices[0].message.content
